@@ -28,6 +28,8 @@ void SorbetWorkspaceEditTask::mergeNewer(SorbetWorkspaceEditTask &task) {
     // Merging is only supported *before* we index this update.
     ENFORCE(updates == nullptr);
     params->merge(*task.params);
+    // Don't report a latency metric for merged edits.
+    task.latencyTimer->cancel();
 }
 
 void SorbetWorkspaceEditTask::index(LSPIndexer &indexer) {
