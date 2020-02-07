@@ -45,6 +45,7 @@ void Timer::cancel() {
 Timer Timer::fork(ConstExprStr name) {
     Timer forked(log, name, prev, {}, start);
     forked.args = args;
+    forked.canceled = canceled;
     return forked;
 }
 
