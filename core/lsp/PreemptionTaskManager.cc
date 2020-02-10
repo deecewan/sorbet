@@ -12,7 +12,7 @@ PreemptionTaskManager::PreemptionTaskManager(shared_ptr<TypecheckEpochManager> e
 
 bool PreemptionTaskManager::trySchedulePreemptionTask(std::shared_ptr<Task> task) {
     TypecheckEpochManager::assertConsistentThread(
-        messageProcessingThreadId, "PreemptionTaskManager::trySchedulePreemptionTask", "message processing thread");
+        processingThreadId, "PreemptionTaskManager::trySchedulePreemptionTask", "processing thread");
     bool success = false;
     // Need to grab epoch lock so we have accurate information w.r.t. if typechecking is happening / if typechecking was
     // canceled. Avoids races with typechecking thread.
@@ -61,9 +61,8 @@ bool PreemptionTaskManager::tryRunScheduledPreemptionTask(core::GlobalState &gs)
 }
 
 bool PreemptionTaskManager::tryCancelScheduledPreemptionTask(std::shared_ptr<Task> &task) {
-    TypecheckEpochManager::assertConsistentThread(messageProcessingThreadId,
-                                                  "PreemptionTaskManager::tryCancelScheduledPreemptionTask",
-                                                  "message processing thread");
+    TypecheckEpochManager::assertConsistentThread(
+        processingThreadId, "PreemptionTaskManager::tryCancelScheduledPreemptionTask", "processing thread");
     return atomic_compare_exchange_strong(&preemptTask, &task, shared_ptr<Task>(nullptr));
 }
 

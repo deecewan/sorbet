@@ -264,7 +264,7 @@ void LSPPreprocessor::preprocessAndEnqueue(unique_ptr<LSPMessage> msg) {
     task->latencyTimer = move(msg->latencyTimer);
     task->preprocess(*this);
     if (task->finalPhase() != LSPTask::Phase::PREPROCESS) {
-        // Enqueue task to be processed on scheduling thread.
+        // Enqueue task to be processed on processing thread.
         absl::MutexLock lock(taskQueueMutex.get());
         const bool isEdit = task->method == LSPMethod::SorbetWorkspaceEdit;
         taskQueue->pendingTasks.push_back(move(task));

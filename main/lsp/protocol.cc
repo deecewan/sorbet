@@ -94,7 +94,7 @@ unique_ptr<Joinable> LSPPreprocessor::runPreprocessor(MessageQueueState &message
 }
 
 optional<unique_ptr<core::GlobalState>> LSPLoop::runLSP(shared_ptr<LSPInput> input) {
-    // Naming convention: thread that executes this function is called scheduling thread
+    // Naming convention: thread that executes this function is called processing thread
 
     // Message queue stores requests that arrive from the client and Watchman. No preprocessing is performed on
     // these messages (e.g., edits are not merged).
@@ -217,10 +217,13 @@ optional<unique_ptr<core::GlobalState>> LSPLoop::runLSP(shared_ptr<LSPInput> inp
                 if (frontTask->finalPhase() == LSPTask::Phase::RUN && epochManager->getStatus().slowPathRunning &&
                     frontTask->canPreempt(indexer)) {
                     absl::Notification finished;
+                    string_view methodStr = convertLSPMethodToString(frontTask->method);
                     auto preemptTask =
                         make_unique<LSPQueuePreemptionTask>(*config, finished, *taskQueueMutex, *taskQueue, indexer);
                     auto scheduleToken = typecheckerCoord.trySchedulePreemption(move(preemptTask));
+
                     if (scheduleToken != nullptr) {
+                        logger->debug("[Processing] Preempting slow path for task {}", methodStr);
                         // Preemption scheduling success!
                         // In this if statement **only**, `taskQueueMutex` protects all accesses to LSPIndexer. This is
                         // needed to linearize the indexing of edits, which may happen in the typechecking thread if a
@@ -246,6 +249,9 @@ optional<unique_ptr<core::GlobalState>> LSPLoop::runLSP(shared_ptr<LSPInput> inp
                             taskQueueMutex->Unlock();
                             finished.WaitForNotification();
                             taskQueueMutex->Lock();
+                            logger->debug("[Processing] Preemption for task {} complete", methodStr);
+                        } else {
+                            logger->debug("[Processing] Canceled scheduled preemption for task {}", methodStr);
                         }
 
                         // At this point, we are guaranteed that the scheduled task has run or has been canceled.
@@ -259,6 +265,8 @@ optional<unique_ptr<core::GlobalState>> LSPLoop::runLSP(shared_ptr<LSPInput> inp
                 taskQueue->pendingTasks.pop_front();
             }
             prodCounterInc("lsp.messages.received");
+
+            logger->debug("[Processing] Running task {} normally", convertLSPMethodToString(task->method));
             runTask(move(task));
 
             if (config->isInitialized() && !initializedNotification.HasBeenNotified()) {

@@ -26,7 +26,7 @@ LSPTask::Phase SorbetWorkspaceEditTask::finalPhase() const {
 
 void SorbetWorkspaceEditTask::mergeNewer(SorbetWorkspaceEditTask &task) {
     // Merging is only supported *before* we index this update.
-    ENFORCE(updates == nullptr);
+    ENFORCE(updates == nullptr && task.updates == nullptr);
     params->merge(*task.params);
     // Don't report a latency metric for merged edits.
     if (task.latencyTimer) {
@@ -35,6 +35,13 @@ void SorbetWorkspaceEditTask::mergeNewer(SorbetWorkspaceEditTask &task) {
     if (task.latencyCancelSlowPath) {
         task.latencyCancelSlowPath->cancel();
     }
+
+    // This cached information is now invalid.
+    task.cachedFileHashesOrEmpty.clear();
+    task.cachedFastPathDecision = false;
+
+    cachedFileHashesOrEmpty.clear();
+    cachedFastPathDecision = false;
 }
 
 void SorbetWorkspaceEditTask::index(LSPIndexer &indexer) {
@@ -65,7 +72,7 @@ void SorbetWorkspaceEditTask::runSpecial(LSPTypechecker &typechecker, WorkerPool
     // Trigger destructor of Timer, which reports metric.
     latencyCancelSlowPath = nullptr;
     // Inform the epoch manager that we're going to perform a cancelable typecheck, then notify the
-    // message processing thread that it's safe to move on.
+    // processing thread that it's safe to move on.
     typechecker.state().epochManager->startCommitEpoch(updates->epoch);
     startedNotification.Notify();
     // Only report stats if the edit was committed.

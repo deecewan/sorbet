@@ -9,18 +9,7 @@ using namespace std;
 
 LSPTask::LSPTask(const LSPConfiguration &config, LSPMethod method) : config(config), method(method) {}
 
-LSPTask::Phase LSPTask::finalPhase() const {
-    return Phase::RUN;
-}
-
-void LSPTask::preprocess(LSPPreprocessor &preprocessor) {}
-
-void LSPTask::index(LSPIndexer &indexer) {}
-
-LSPRequestTask::LSPRequestTask(const LSPConfiguration &config, MessageId id, LSPMethod method)
-    : LSPTask(config, method), id(move(id)) {}
-
-LSPRequestTask::~LSPRequestTask() {
+LSPTask::~LSPTask() {
     if (!latencyTimer) {
         return;
     }
@@ -89,6 +78,17 @@ LSPRequestTask::~LSPRequestTask() {
             break;
     }
 }
+
+LSPTask::Phase LSPTask::finalPhase() const {
+    return Phase::RUN;
+}
+
+void LSPTask::preprocess(LSPPreprocessor &preprocessor) {}
+
+void LSPTask::index(LSPIndexer &indexer) {}
+
+LSPRequestTask::LSPRequestTask(const LSPConfiguration &config, MessageId id, LSPMethod method)
+    : LSPTask(config, method), id(move(id)) {}
 
 void LSPRequestTask::run(LSPTypecheckerDelegate &typechecker) {
     auto response = runRequest(typechecker);
@@ -256,7 +256,7 @@ void LSPQueuePreemptionTask::run(LSPTypecheckerDelegate &tc) {
             task = move(taskQueue.pendingTasks.front());
             taskQueue.pendingTasks.pop_front();
 
-            // Index while holding lock to prevent races with message processing thread.
+            // Index while holding lock to prevent races with processing thread.
             task->index(indexer);
         }
         prodCounterInc("lsp.messages.received");

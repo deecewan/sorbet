@@ -44,7 +44,7 @@ protected:
     LSPTask(const LSPConfiguration &config, LSPMethod method);
 
 public:
-    virtual ~LSPTask() = default;
+    virtual ~LSPTask();
 
     const LSPMethod method;
 
@@ -79,9 +79,9 @@ public:
     // a no-op. Is only ever invoked from the preprocessor thread.
     virtual void preprocess(LSPPreprocessor &preprocessor);
 
-    // Some tasks, like edits, need to interface with the indexer. Is only ever invoked from the message processing
+    // Some tasks, like edits, need to interface with the indexer. Is only ever invoked from the processing
     // thread, and is guaranteed to be invoked exactly once. The default implementation is a no-op.
-    // May be run from the scheduler thread (normally) or the typechecking thread (if preempting).
+    // May be run from the processing thread (normally) or the typechecking thread (if preempting).
     virtual void index(LSPIndexer &indexer);
 
     // Runs the task. Is only ever invoked from the typechecker thread. Since it is exceedingly rare for a request to
@@ -101,8 +101,6 @@ protected:
     virtual std::unique_ptr<ResponseMessage> runRequest(LSPTypecheckerDelegate &typechecker) = 0;
 
 public:
-    virtual ~LSPRequestTask();
-
     void run(LSPTypecheckerDelegate &typechecker) override;
 
     bool cancel(const MessageId &id) override;
