@@ -48,8 +48,14 @@ void LSPLoop::runTask(unique_ptr<LSPTask> task) {
         if (auto *editTask = dynamic_cast<SorbetWorkspaceEditTask *>(dangerousTask)) {
             unique_ptr<SorbetWorkspaceEditTask> edit(editTask);
             task.release();
-            const bool canPreempt = edit->canPreempt(indexer);
-            typecheckerCoord.typecheck(move(edit), canPreempt);
+            if (edit->canTakeFastPath(indexer)) {
+                // Can run on fast path synchronously; it should complete quickly.
+                typecheckerCoord.syncRun(move(edit));
+            } else {
+                // Must run on slow path; this method is async in multithreaded environments, and blocks in
+                // single threaded environments.
+                typecheckerCoord.typecheckOnSlowPath(move(edit));
+            }
         } else if (auto *initializedTask = dynamic_cast<InitializedTask *>(dangerousTask)) {
             unique_ptr<InitializedTask> initialized(initializedTask);
             task.release();
@@ -61,8 +67,8 @@ void LSPLoop::runTask(unique_ptr<LSPTask> task) {
             ENFORCE(false);
         }
     } else {
-        const bool canPreempt = task->canPreempt(indexer);
-        typecheckerCoord.syncRun(move(task), canPreempt);
+        // Run synchronously.
+        typecheckerCoord.syncRun(move(task));
     }
 }
 } // namespace sorbet::realmain::lsp

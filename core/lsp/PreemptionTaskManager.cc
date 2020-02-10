@@ -61,6 +61,9 @@ bool PreemptionTaskManager::tryRunScheduledPreemptionTask(core::GlobalState &gs)
 }
 
 bool PreemptionTaskManager::tryCancelScheduledPreemptionTask(std::shared_ptr<Task> &task) {
+    TypecheckEpochManager::assertConsistentThread(messageProcessingThreadId,
+                                                  "PreemptionTaskManager::tryCancelScheduledPreemptionTask",
+                                                  "message processing thread");
     return atomic_compare_exchange_strong(&preemptTask, &task, shared_ptr<Task>(nullptr));
 }
 

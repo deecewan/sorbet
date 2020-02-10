@@ -81,6 +81,7 @@ public:
 
     // Some tasks, like edits, need to interface with the indexer. Is only ever invoked from the message processing
     // thread, and is guaranteed to be invoked exactly once. The default implementation is a no-op.
+    // May be run from the scheduler thread (normally) or the typechecking thread (if preempting).
     virtual void index(LSPIndexer &indexer);
 
     // Runs the task. Is only ever invoked from the typechecker thread. Since it is exceedingly rare for a request to
@@ -126,16 +127,19 @@ public:
 
 class LSPIndexer;
 struct TaskQueueState;
+
+/**
+ * Represents a preemption task. When run, it will run all tasks at the head of TaskQueueState that can preempt.
+ */
 class LSPQueuePreemptionTask final : public LSPTask {
-    absl::Notification &started;
     absl::Notification &finished;
     absl::Mutex &taskQueueMutex;
     TaskQueueState &taskQueue GUARDED_BY(taskQueueMutex);
     LSPIndexer &indexer;
 
 public:
-    LSPQueuePreemptionTask(const LSPConfiguration &config, absl::Notification &started, absl::Notification &finished,
-                           absl::Mutex &taskQueueMutex, TaskQueueState &taskQueue, LSPIndexer &indexer);
+    LSPQueuePreemptionTask(const LSPConfiguration &config, absl::Notification &finished, absl::Mutex &taskQueueMutex,
+                           TaskQueueState &taskQueue, LSPIndexer &indexer);
 
     void run(LSPTypecheckerDelegate &tc) override;
 };

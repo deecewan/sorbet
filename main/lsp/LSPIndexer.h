@@ -21,7 +21,7 @@ class LSPConfiguration;
 class LSPIndexer final {
     bool initialized = false;
     /** Encapsulates the active configuration for the language server. */
-    std::shared_ptr<const LSPConfiguration> config;
+    const std::shared_ptr<const LSPConfiguration> config;
     /** Global state that we keep up-to-date with file edits. We do _not_ typecheck using this global state! We clone
      * this global state every time we need to perform a slow path typechecking operation. */
     std::unique_ptr<core::GlobalState> initialGS;

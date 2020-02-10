@@ -209,6 +209,52 @@ optional<unique_ptr<core::GlobalState>> LSPLoop::runLSP(shared_ptr<LSPInput> inp
                     }
                 }
 
+                // Before giving up the lock, check if the typechecker is running a slow path and if the task at the
+                // head of the queue can preempt. If it is, we may be able to schedule a preemption.
+                // Don't bother scheduling tasks to preempt that only need the indexer.
+                // N.B.: We check `canPreempt` last as it is mildly expensive for edits (it hashes the files)
+                auto &frontTask = taskQueue->pendingTasks.front();
+                if (frontTask->finalPhase() == LSPTask::Phase::RUN && epochManager->getStatus().slowPathRunning &&
+                    frontTask->canPreempt(indexer)) {
+                    absl::Notification finished;
+                    auto preemptTask =
+                        make_unique<LSPQueuePreemptionTask>(*config, finished, *taskQueueMutex, *taskQueue, indexer);
+                    auto scheduleToken = typecheckerCoord.trySchedulePreemption(move(preemptTask));
+                    if (scheduleToken != nullptr) {
+                        // Preemption scheduling success!
+                        // In this if statement **only**, `taskQueueMutex` protects all accesses to LSPIndexer. This is
+                        // needed to linearize the indexing of edits, which may happen in the typechecking thread if a
+                        // fast path edit preempts, with the `canPreempt` checks of edits in this thread.
+                        auto headOfQueueCanPreempt = [&indexer = this->indexer,
+                                                      &taskQueue = this->taskQueue]() -> bool {
+                            // Await always holds taskQueueMutex when calling this function, but absl doesn't know that.
+                            return ABSL_TS_UNCHECKED_READ(taskQueue)->pendingTasks.empty() ||
+                                   !ABSL_TS_UNCHECKED_READ(taskQueue)->pendingTasks.front()->canPreempt(indexer);
+                        };
+                        // Wait until the head of the queue turns into a non-preemptible task to resume processing the
+                        // queue.
+                        taskQueueMutex->Await(absl::Condition(&headOfQueueCanPreempt));
+
+                        // The queue is now empty or has a task that cannot preempt. There are two possibilities here:
+                        // 1) The scheduled work is now irrelevant because the task that was scheduled is now gone
+                        // (e.g., the request was canceled or, in the case of an edit, merged w/ a slow path edit)
+                        // 2) The scheduled work has already started (and may have finished).
+                        // Pessimistically assume 1) and try to cancel the scheduled preemption.
+                        if (!typecheckerCoord.tryCancelPreemption(scheduleToken)) {
+                            // Cancelation failed: 2) must be the case. Unlock the queue and wait until task finishes to
+                            // avoid races.
+                            taskQueueMutex->Unlock();
+                            finished.WaitForNotification();
+                            taskQueueMutex->Lock();
+                        }
+
+                        // At this point, we are guaranteed that the scheduled task has run or has been canceled.
+                        continue;
+                    }
+                    // If preemption scheduling failed, then the slow path probably finished just now. Continue as
+                    // normal.
+                }
+
                 task = move(taskQueue->pendingTasks.front());
                 taskQueue->pendingTasks.pop_front();
             }

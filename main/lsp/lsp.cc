@@ -16,7 +16,7 @@ namespace sorbet::realmain::lsp {
 LSPLoop::LSPLoop(std::unique_ptr<core::GlobalState> initialGS, WorkerPool &workers,
                  const std::shared_ptr<LSPConfiguration> &config)
     : config(config), taskQueueMutex(make_shared<absl::Mutex>()), taskQueue(make_shared<TaskQueueState>()),
-      preprocessor(config, taskQueueMutex, taskQueue),
+      epochManager(initialGS->epochManager), preprocessor(config, taskQueueMutex, taskQueue),
       typecheckerCoord(config, make_shared<core::lsp::PreemptionTaskManager>(initialGS->epochManager), workers),
       indexer(config, move(initialGS)), emptyWorkers(WorkerPool::create(0, *config->logger)),
       lastMetricUpdateTime(chrono::steady_clock::now()) {}
@@ -64,7 +64,7 @@ public:
 
 int LSPLoop::getTypecheckCount() {
     int count = 0;
-    typecheckerCoord.syncRun(make_unique<TypecheckCountTask>(*config, count), false);
+    typecheckerCoord.syncRun(make_unique<TypecheckCountTask>(*config, count));
     return count;
 }
 

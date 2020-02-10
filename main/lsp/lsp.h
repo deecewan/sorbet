@@ -33,6 +33,7 @@ class LSPLoop {
     const std::shared_ptr<absl::Mutex> taskQueueMutex;
     /** Contains the output of LSPPreprocessor -- messages that have been converted into tasks. */
     const std::shared_ptr<TaskQueueState> taskQueue GUARDED_BY(taskQueueMutex);
+    const std::shared_ptr<core::lsp::TypecheckEpochManager> epochManager;
 
     /** The LSP preprocessor standardizes incoming messages and combines edits. */
     LSPPreprocessor preprocessor;

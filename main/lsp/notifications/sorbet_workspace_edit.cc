@@ -29,7 +29,12 @@ void SorbetWorkspaceEditTask::mergeNewer(SorbetWorkspaceEditTask &task) {
     ENFORCE(updates == nullptr);
     params->merge(*task.params);
     // Don't report a latency metric for merged edits.
-    task.latencyTimer->cancel();
+    if (task.latencyTimer) {
+        task.latencyTimer->cancel();
+    }
+    if (task.latencyCancelSlowPath) {
+        task.latencyCancelSlowPath->cancel();
+    }
 }
 
 void SorbetWorkspaceEditTask::index(LSPIndexer &indexer) {
@@ -80,8 +85,9 @@ bool SorbetWorkspaceEditTask::canTakeFastPath(const LSPIndexer &index) const {
     }
     if (cachedFileHashesOrEmpty.empty()) {
         cachedFileHashesOrEmpty = index.computeFileHashes(params->updates);
+        cachedFastPathDecision = index.canTakeFastPath(*params, cachedFileHashesOrEmpty);
     }
-    return index.canTakeFastPath(*params, cachedFileHashesOrEmpty);
+    return cachedFastPathDecision;
 }
 
 bool SorbetWorkspaceEditTask::canPreempt(const LSPIndexer &index) const {

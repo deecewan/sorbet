@@ -54,14 +54,30 @@ public:
     void initialize(std::unique_ptr<InitializedTask> initializedTask);
 
     /**
-     * Runs the given typecheck task. Will run asynchronously if typecheckTask takes the slow path.
+     * Runs the given typecheck task asynchronously on the slow path.
      */
-    void typecheck(std::unique_ptr<SorbetWorkspaceEditTask> typecheckTask, bool canTakeFastPath);
+    void typecheckOnSlowPath(std::unique_ptr<SorbetWorkspaceEditTask> typecheckTask);
 
     /**
      * Schedules a task to run on the typechecker thread. Blocks until it completes.
      */
-    void syncRun(std::unique_ptr<LSPTask> task, bool canPreempt);
+    void syncRun(std::unique_ptr<LSPTask> task);
+
+    /**
+     * Attempts to schedule a task to preempt the slow path. Returns the scheduled task if it succeeds, or nullptr
+     * otherwise. The scheduled task should only be used in `tryCancelPreemption` to cancel the scheduled preemption
+     * task.
+     *
+     * Does not block. It is the responsibility of the caller to properly block. Should only be used in one place
+     * in `protocol.cc`.
+     */
+    std::shared_ptr<core::lsp::Task> trySchedulePreemption(std::unique_ptr<LSPQueuePreemptionTask> preemptTask);
+
+    /**
+     * Attempts to cancel the scheduled preeemption task. Returns true if it succeeds, or false if the task has or will
+     * run.
+     */
+    bool tryCancelPreemption(std::shared_ptr<core::lsp::Task> &preemptTask);
 
     /**
      * Safely shuts down the typechecker and returns the final GlobalState object. Blocks until typechecker completes

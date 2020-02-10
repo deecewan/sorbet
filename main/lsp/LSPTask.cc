@@ -239,14 +239,13 @@ void LSPTask::addLocIfExists(const core::GlobalState &gs, vector<unique_ptr<Loca
     }
 }
 
-LSPQueuePreemptionTask::LSPQueuePreemptionTask(const LSPConfiguration &config, absl::Notification &started,
-                                               absl::Notification &finished, absl::Mutex &taskQueueMutex,
-                                               TaskQueueState &taskQueue, LSPIndexer &indexer)
-    : LSPTask(config, LSPMethod::SorbetError), started(started), finished(finished), taskQueueMutex(taskQueueMutex),
-      taskQueue(taskQueue), indexer(indexer) {}
+LSPQueuePreemptionTask::LSPQueuePreemptionTask(const LSPConfiguration &config, absl::Notification &finished,
+                                               absl::Mutex &taskQueueMutex, TaskQueueState &taskQueue,
+                                               LSPIndexer &indexer)
+    : LSPTask(config, LSPMethod::SorbetError), finished(finished), taskQueueMutex(taskQueueMutex), taskQueue(taskQueue),
+      indexer(indexer) {}
 
 void LSPQueuePreemptionTask::run(LSPTypecheckerDelegate &tc) {
-    started.Notify();
     for (;;) {
         unique_ptr<LSPTask> task;
         {
@@ -256,8 +255,15 @@ void LSPQueuePreemptionTask::run(LSPTypecheckerDelegate &tc) {
             }
             task = move(taskQueue.pendingTasks.front());
             taskQueue.pendingTasks.pop_front();
+
+            // Index while holding lock to prevent races with message processing thread.
+            task->index(indexer);
         }
         prodCounterInc("lsp.messages.received");
+
+        if (task->finalPhase() == Phase::INDEX) {
+            continue;
+        }
         task->run(tc);
     }
     finished.Notify();
@@ -267,7 +273,7 @@ LSPDangerousTypecheckerTask::LSPDangerousTypecheckerTask(const LSPConfiguration 
     : LSPTask(config, method) {}
 
 void LSPDangerousTypecheckerTask::run(LSPTypecheckerDelegate &tc) {
-    Exception::raise("You cannot run a dangerous typechecker task normally");
+    Exception::raise("Bug: Dangerous typechecker tasks are expected to run specially");
 }
 
 } // namespace sorbet::realmain::lsp
