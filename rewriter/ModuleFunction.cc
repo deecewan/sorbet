@@ -72,7 +72,7 @@ vector<unique_ptr<ast::Expression>> ModuleFunction::rewriteDefn(core::MutableCon
     vector<unique_ptr<ast::Expression>> stats;
     auto mdef = ast::cast_tree_const<ast::MethodDef>(expr);
     // only do this rewrite to method defs that aren't self methods
-    if (mdef == nullptr || (mdef->flags & ast::MethodDef::SelfMethod) != 0) {
+    if (mdef == nullptr || mdef->isSelf()) {
         stats.emplace_back(expr->deepCopy());
         return stats;
     }
@@ -92,7 +92,8 @@ vector<unique_ptr<ast::Expression>> ModuleFunction::rewriteDefn(core::MutableCon
     unique_ptr<ast::Expression> moduleCopy = expr->deepCopy();
     ENFORCE(moduleCopy, "Should be non-nil.");
     auto newDefn = ast::cast_tree<ast::MethodDef>(moduleCopy.get());
-    newDefn->flags |= ast::MethodDef::SelfMethod | ast::MethodDef::RewriterSynthesized;
+    newDefn->flags |= ast::MethodDef::Flags::SelfMethod;
+    newDefn->flags |= ast::MethodDef::Flags::RewriterSynthesized;
     stats.emplace_back(move(moduleCopy));
 
     return stats;
@@ -132,8 +133,9 @@ vector<unique_ptr<ast::Expression>> ModuleFunction::run(core::MutableContext ctx
             ast::MethodDef::ARGS_store args;
             args.emplace_back(ast::MK::RestArg(loc, ast::MK::Local(loc, core::Names::arg0())));
             args.emplace_back(std::make_unique<ast::BlockArg>(loc, ast::MK::Local(loc, core::Names::blkArg())));
-            stats.emplace_back(ast::MK::Method(loc, loc, methodName, std::move(args), ast::MK::EmptyTree(),
-                                               ast::MethodDef::SelfMethod | ast::MethodDef::RewriterSynthesized));
+            auto methodDef = ast::MK::Method(loc, loc, methodName, std::move(args), ast::MK::EmptyTree());
+            methodDef->flags |= ast::MethodDef::Flags::SelfMethod;
+            stats.emplace_back(std::move(methodDef));
         } else {
             if (auto e = ctx.state.beginError(arg->loc, core::errors::Rewriter::BadModuleFunction)) {
                 e.setHeader("Bad argument to `{}`: must be a symbol, string, method definition, or nothing",
